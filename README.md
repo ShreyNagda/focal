@@ -62,32 +62,6 @@ Focal is a modern, aesthetic Pomodoro timer application built with Flutter. It i
     flutter run
     ```
 
-## ⚙️ Configuration
-
-### Android
-
-To ensure the timer runs accurately in the background and notifications work correctly, the following permissions are configured in `android/app/src/main/AndroidManifest.xml`:
-
-```xml
-<manifest ...>
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-
-    <application ...>
-        <receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-            </intent-filter>
-        </receiver>
-
-        <service android:name="id.flutter.flutter_background_service.BackgroundService" />
-    </application>
-</manifest>
-```
 
 📂 Project Structure
 lib/
