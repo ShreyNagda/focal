@@ -53,7 +53,9 @@ class _FlipDigitState extends State<FlipDigit>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(
+        milliseconds: 600,
+      ), // Slightly faster for responsiveness
     );
     _currentDigit = widget.digit;
     _nextDigit = widget.digit;
@@ -132,8 +134,7 @@ class _FlipDigitState extends State<FlipDigit>
                 Align(
                   alignment: Alignment.topCenter,
                   child: Transform(
-                    alignment:
-                        Alignment.bottomCenter, // Hinge at bottom of this half
+                    alignment: Alignment.bottomCenter,
                     transform: transform..rotateX(-math.pi * value),
                     child: _DigitHalf(digit: displayDigit, isTop: true),
                   ),
@@ -143,7 +144,7 @@ class _FlipDigitState extends State<FlipDigit>
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: Transform(
-                    alignment: Alignment.topCenter, // Hinge at top of this half
+                    alignment: Alignment.topCenter,
                     transform: transform..rotateX(-math.pi * (value - 1)),
                     child: _DigitHalf(digit: nextDigit, isTop: false),
                   ),
@@ -170,16 +171,16 @@ class _DigitHalf extends StatelessWidget {
         bottom: isTop ? Radius.zero : const Radius.circular(8),
       ),
       child: Align(
-        // This cuts the container in half visually
         alignment: isTop ? Alignment.topCenter : Alignment.bottomCenter,
         heightFactor: 0.5,
         child: Container(
-          width: 100,
-          height: 140,
+          width: 80,
+          height: 120,
           decoration: const BoxDecoration(color: Color(0xFF2C3E50)),
           child: Stack(
             alignment: Alignment.center,
             children: [
+              // Background Gradient
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -191,13 +192,15 @@ class _DigitHalf extends StatelessWidget {
                   ),
                 ),
               ),
+
+              // Text
               Text(
                 '$digit',
                 style: TextStyle(
                   fontSize: 80,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
-                  height: 1.0,
+                  height: 1.0, // Tight height for better vertical centering
                   shadows: [
                     Shadow(
                       color: Colors.black.withAlpha(50),
@@ -207,21 +210,33 @@ class _DigitHalf extends StatelessWidget {
                   ],
                 ),
               ),
+
+              // Divider / Seam Visuals
               if (isTop)
                 Positioned(
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  height: 2, // Thicker divider
-                  child: Container(color: Colors.black.withAlpha(75)),
+                  height: 4, // Thicker hinge for top half
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withAlpha(100),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Colors.black.withAlpha(130),
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                  ),
                 )
               else
                 Positioned(
                   top: 0,
                   left: 0,
                   right: 0,
-                  height: 1,
-                  child: Container(color: Colors.white.withAlpha(25)),
+                  height: 1, // Subtle highlight for bottom half edge
+                  child: Container(color: Colors.white.withAlpha(40)),
                 ),
             ],
           ),
