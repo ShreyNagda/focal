@@ -1,3 +1,20 @@
+# focal
+
+A new Flutter project.
+
+## Getting Started
+
+This project is a starting point for a Flutter application.
+
+A few resources to get you started if this is your first Flutter project:
+
+- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
+- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+
+For help getting started with Flutter development, view the
+[online documentation](https://docs.flutter.dev/), which offers tutorials,
+samples, guidance on mobile development, and a full API reference.
+
 # 🍅 Focal Timer
 
 Focal is a modern, aesthetic Pomodoro timer application built with Flutter. It is designed to help you stay focused and productive by using the Pomodoro Technique, managing your work sessions and breaks efficiently.
@@ -16,7 +33,7 @@ Focal is a modern, aesthetic Pomodoro timer application built with Flutter. It i
 - **Customizable Settings:** Adjust durations for work, short breaks, and long breaks to suit your workflow.
 - **Audio Feedback:** Plays a bell sound upon session completion.
 - **Productivity Tracking:** Tracks completed sessions and progress towards daily goals.
-- **Beautiful Dark UI:** Designed with a clean, OLED-friendly dark theme.
+- **Beautiful Dark UI:** Designed with a clean, OLED-friendly dark theme and electric blue accents.
 
 ## 🛠️ Tech Stack
 
@@ -26,12 +43,3 @@ Focal is a modern, aesthetic Pomodoro timer application built with Flutter. It i
 - **Notifications:** [Flutter Local Notifications](https://pub.dev/packages/flutter_local_notifications)
 - **Background Task:** [Flutter Background Service](https://pub.dev/packages/flutter_background_service)
 - **Audio:** [AudioPlayers](https://pub.dev/packages/audioplayers)
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Flutter SDK (Latest Stable)
-- Dart SDK
-- Android Studio / VS Code
-- An Android device or emulator (Android 12+ recommended for exact alarm testing)

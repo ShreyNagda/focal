@@ -1,274 +1,274 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:focal/constants/strings.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../models/timer_state.dart';
-import '../services/notification_service.dart';
-import '../services/background_service.dart';
+import 'package:flutter/foundation.dart'; // For kIsWeb
+import 'package:flutter_background_service/flutter_background_service.dart';
+import '../models/timer_settings.dart';
+import '../services/storage_service.dart';
 import '../services/audio_service.dart';
 
 class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
-  TimerState _state = TimerState();
-  Timer? _timer;
-  DateTime? _targetEndTime;
+  final StorageService _storage;
+  final AudioService _audioService = AudioService();
 
-  TimerState get state => _state;
+  TimerSettings _settings = TimerSettings();
+  late TimerState _state;
+  Timer? _uiTicker;
 
-  TimerProvider() {
+  TimerProvider(this._storage) {
     WidgetsBinding.instance.addObserver(this);
-    _restoreState();
+    _state = TimerState.initial(25, 4);
+    _init();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
+    _audioService.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
-      // --- APP BACKGROUNDED ---
-      if (_state.status == TimerStatus.running) {
-        // 1. Stop local timer
-        _timer?.cancel();
-
-        // 2. Start Background Service (Shows Countdown)
-        final nextLabel = _getNextBlockLabel();
-        BackgroundService.startBackgroundTimer(
-          _state.remainingSeconds,
-          _state.typeLabel,
-          nextLabel,
-        );
-      } else if (_state.status == TimerStatus.paused) {
-        // 3. NEW: Show "Paused" Notification if paused
-        NotificationService.showTimerNotification(_state.typeLabel, "Paused");
-      }
-    } else if (state == AppLifecycleState.resumed) {
-      // --- APP RESUMED ---
-      // 1. Stop Background Service
-      BackgroundService.stopBackgroundTimer();
-
-      // 2. Cancel "Paused" Notification (if it exists)
-      NotificationService.cancelTimerNotification();
-
-      // 3. Sync time and resume local timer
-      _restoreState();
+    // Only attempt to sync with background service on Mobile
+    if (!kIsWeb &&
+        state == AppLifecycleState.paused &&
+        _state.status == TimerStatus.running) {
+      _sendBackgroundStartCommand();
     }
   }
 
-  String _getNextBlockLabel() {
-    if (_state.currentType == TimerType.work) {
-      final nextPomodoros = _state.currentPomodoros + 1;
-      if (nextPomodoros >= _state.pomodorosUntilLongBreak) {
-        return "Long Break";
-      } else {
-        return "Short Break";
+  TimerState get state => _state;
+  TimerSettings get settings => _settings;
+
+  int getMinutes() => _state.remainingSeconds ~/ 60;
+  int getSeconds() => _state.remainingSeconds % 60;
+
+  void _init() {
+    _settings = _storage.loadSettings();
+    _resetStateToCurrentSettings();
+
+    if (_storage.getIsRunning()) {
+      final int? targetEpoch = _storage.getTargetEndTime();
+      final int? savedTotal = _storage.getTotalDuration();
+
+      if (targetEpoch != null && savedTotal != null) {
+        final DateTime target = DateTime.fromMillisecondsSinceEpoch(
+          targetEpoch,
+        );
+        final DateTime now = DateTime.now();
+
+        if (target.isAfter(now)) {
+          TimerType recoveredType = TimerType.work;
+          if (savedTotal == _settings.shortBreakDurationMinutes * 60) {
+            recoveredType = TimerType.shortBreak;
+          } else if (savedTotal == _settings.longBreakDurationMinutes * 60) {
+            recoveredType = TimerType.longBreak;
+          }
+
+          _state = _state.copyWith(
+            status: TimerStatus.running,
+            totalSeconds: savedTotal,
+            currentType: recoveredType,
+            isFlipView: _settings.isFlipStyle,
+          );
+
+          _startUiTicker(target);
+        } else {
+          _timerCompleted();
+          _storage.clearTimerState();
+        }
       }
-    } else {
-      return "Focus Time";
     }
+    notifyListeners();
+  }
+
+  void toggleView() {
+    final newStyle = !_state.isFlipView;
+    _state = _state.copyWith(isFlipView: newStyle);
+    _settings.isFlipStyle = newStyle;
+    _storage.saveSettings(_settings);
+    notifyListeners();
+  }
+
+  void updateSettings(TimerSettings newSettings) {
+    _settings = newSettings;
+    _storage.saveSettings(newSettings);
+
+    _state = _state.copyWith(isFlipView: newSettings.isFlipStyle);
+
+    if (_state.status == TimerStatus.initial) {
+      _resetStateToCurrentSettings();
+    }
+    notifyListeners();
   }
 
   Future<void> startTimer() async {
     if (_state.status == TimerStatus.running) return;
 
-    _targetEndTime = DateTime.now().add(
-      Duration(seconds: _state.remainingSeconds),
-    );
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(kKeyTargetTime, _targetEndTime!.toIso8601String());
+    final duration = _state.remainingSeconds;
+    final target = DateTime.now().add(Duration(seconds: duration));
 
-    _state = _state.copyWith(
-      status: TimerStatus.running,
-      startTime: DateTime.now(),
-    );
-
-    await _saveState();
-    await NotificationService.cancelAll(); // Clear any existing notifications
-
-    _startTicker();
+    _state = _state.copyWith(status: TimerStatus.running);
     notifyListeners();
+
+    // WEB GUARD: Only run service logic on mobile
+    if (!kIsWeb) {
+      final service = FlutterBackgroundService();
+      if (!await service.isRunning()) {
+        await service.startService();
+      }
+      _sendBackgroundStartCommand();
+    }
+
+    // Local ticker runs on both Web and Mobile
+    _startUiTicker(target);
   }
 
-  Future<void> pauseTimer() async {
-    _timer?.cancel();
-    _targetEndTime = null;
+  void _sendBackgroundStartCommand() {
+    String finishTitle = "Timer Finished";
+    String finishBody = "Time's up!";
 
-    // Ensure background service is stopped if we pause while open
-    await BackgroundService.stopBackgroundTimer();
+    if (_state.currentType == TimerType.work) {
+      finishTitle = "Focus Complete";
+      int nextPomos = _state.currentPomodoros + 1;
+      if (nextPomos >= _settings.workIntervalsUntilLongBreak) {
+        finishBody = "Great job! Time for a long break.";
+      } else {
+        finishBody = "Good work. Take a short break.";
+      }
+    } else {
+      finishTitle = "Break Over";
+      finishBody = "Ready to focus again?";
+    }
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(kKeyTargetTime);
+    FlutterBackgroundService().invoke('start', {
+      'duration': _state.remainingSeconds,
+      'title': _state.typeLabel,
+      'body': _state.currentType == TimerType.work
+          ? 'Stay focused!'
+          : 'Relax & recharge.',
+      'finishTitle': finishTitle,
+      'finishBody': finishBody,
+      'isSoundEnabled': _settings.isSoundEnabled,
+    });
+  }
+
+  void pauseTimer() {
+    _uiTicker?.cancel();
+
+    // WEB GUARD
+    if (!kIsWeb) {
+      FlutterBackgroundService().invoke('pause', {
+        'title': '${_state.typeLabel} - Paused',
+        'body': 'Tap to resume',
+      });
+    }
 
     _state = _state.copyWith(status: TimerStatus.paused);
-    await _saveState();
     notifyListeners();
   }
 
-  Future<void> resetTimer() async {
-    _timer?.cancel();
-    _targetEndTime = null;
+  void resetTimer() {
+    _uiTicker?.cancel();
 
-    await BackgroundService.stopBackgroundTimer();
-    await NotificationService.cancelAll();
+    // WEB GUARD
+    if (!kIsWeb) {
+      FlutterBackgroundService().invoke('stop');
+    }
+    _storage.clearTimerState();
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(kKeyTargetTime);
+    int duration = _getDurationForType(_state.currentType);
 
     _state = _state.copyWith(
       status: TimerStatus.initial,
-      remainingSeconds: _state.totalSeconds,
-      startTime: null,
+      remainingSeconds: duration,
+      totalSeconds: duration,
     );
-
-    await _saveState();
     notifyListeners();
   }
-
-  Future<void> _completeTimer() async {
-    _targetEndTime = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(kKeyTargetTime);
-
-    _state = _state.copyWith(status: TimerStatus.completed);
-
-    // Play Sound (App is Open)
-    await AudioService.playBell();
-
-    if (_state.currentType == TimerType.work) {
-      _state = _state.copyWith(currentPomodoros: _state.currentPomodoros + 1);
-    }
-
-    await _saveState();
-    notifyListeners();
-  }
-
-  Future<void> _restoreState() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedJson = prefs.getString(kKeyTimerState);
-
-    if (savedJson != null) {
-      try {
-        final stateMap = jsonDecode(savedJson);
-        final loadedState = TimerState.fromJson(stateMap);
-
-        if (loadedState.status == TimerStatus.running) {
-          _state = loadedState;
-          await _restoreTargetTimeAndSync();
-        } else {
-          _state = loadedState;
-          _targetEndTime = null;
-          _timer?.cancel();
-          notifyListeners();
-        }
-      } catch (e) {
-        debugPrint("Error restoring state: $e");
-      }
-    }
-  }
-
-  Future<void> _restoreTargetTimeAndSync() async {
-    final prefs = await SharedPreferences.getInstance();
-    final targetIso = prefs.getString(kKeyTargetTime);
-
-    if (targetIso != null) {
-      _targetEndTime = DateTime.parse(targetIso);
-      _startTicker();
-    } else {
-      await pauseTimer();
-    }
-  }
-
-  void _startTicker() {
-    _timer?.cancel();
-    _syncTime();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _syncTime());
-  }
-
-  void _syncTime() {
-    if (_targetEndTime == null) return;
-    final now = DateTime.now();
-    final remaining = _targetEndTime!.difference(now).inSeconds;
-
-    if (remaining <= 0) {
-      _timer?.cancel();
-      _state = _state.copyWith(remainingSeconds: 0);
-      _completeTimer();
-    } else {
-      if (remaining != _state.remainingSeconds) {
-        _state = _state.copyWith(remainingSeconds: remaining);
-        notifyListeners();
-      }
-    }
-  }
-
-  Future<void> _saveState() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(kKeyTimerState, jsonEncode(_state.toJson()));
-  }
-
-  int getMinutes() => _state.remainingSeconds ~/ 60;
-  int getSeconds() => _state.remainingSeconds % 60;
 
   Future<void> startNextBlock() async {
     TimerType nextType;
+    int nextPomodoros = _state.currentPomodoros;
+
     if (_state.currentType == TimerType.work) {
-      nextType = _state.currentPomodoros >= _state.pomodorosUntilLongBreak
-          ? TimerType.longBreak
-          : TimerType.shortBreak;
-      if (nextType == TimerType.longBreak) {
-        _state = _state.copyWith(currentPomodoros: 0);
+      nextPomodoros++;
+      if (nextPomodoros >= _settings.workIntervalsUntilLongBreak) {
+        nextType = TimerType.longBreak;
+      } else {
+        nextType = TimerType.shortBreak;
       }
+    } else if (_state.currentType == TimerType.longBreak) {
+      nextType = TimerType.work;
+      nextPomodoros = 0;
     } else {
       nextType = TimerType.work;
     }
 
+    int nextDuration = _getDurationForType(nextType);
+
     _state = _state.copyWith(
       currentType: nextType,
       status: TimerStatus.initial,
-      remainingSeconds: _durationFor(nextType),
+      remainingSeconds: nextDuration,
+      totalSeconds: nextDuration,
+      currentPomodoros: nextPomodoros,
+      pomodorosUntilLongBreak: _settings.workIntervalsUntilLongBreak,
+      isFlipView: _settings.isFlipStyle,
     );
-    _state = _state.copyWith(remainingSeconds: _state.totalSeconds);
-
-    await _saveState();
     notifyListeners();
   }
 
-  int _durationFor(TimerType type) {
+  int _getDurationForType(TimerType type) {
     switch (type) {
       case TimerType.work:
-        return _state.workDuration * 60;
+        return _settings.workDurationMinutes * 60;
       case TimerType.shortBreak:
-        return _state.shortBreakDuration * 60;
+        return _settings.shortBreakDurationMinutes * 60;
       case TimerType.longBreak:
-        return _state.longBreakDuration * 60;
+        return _settings.longBreakDurationMinutes * 60;
     }
   }
 
-  void toggleView() {
-    _state = _state.copyWith(isFlipView: !_state.isFlipView);
-    notifyListeners();
+  void _resetStateToCurrentSettings() {
+    final workSecs = _settings.workDurationMinutes * 60;
+    _state =
+        TimerState.initial(
+          _settings.workDurationMinutes,
+          _settings.workIntervalsUntilLongBreak,
+        ).copyWith(
+          isFlipView: _settings.isFlipStyle,
+          totalSeconds: workSecs,
+          remainingSeconds: workSecs,
+        );
   }
 
-  void updateSettings({
-    int? workDuration,
-    int? shortBreakDuration,
-    int? longBreakDuration,
-    int? pomodorosUntilLongBreak,
-  }) {
+  void _startUiTicker(DateTime targetTime) {
+    _uiTicker?.cancel();
+    _uiTicker = Timer.periodic(const Duration(milliseconds: 200), (timer) {
+      final now = DateTime.now();
+      final diff = targetTime.difference(now).inSeconds;
+
+      if (diff <= 0) {
+        _timerCompleted();
+      } else {
+        _state = _state.copyWith(remainingSeconds: diff);
+        notifyListeners();
+      }
+    });
+  }
+
+  void _timerCompleted() {
+    _uiTicker?.cancel();
     _state = _state.copyWith(
-      workDuration: workDuration,
-      shortBreakDuration: shortBreakDuration,
-      longBreakDuration: longBreakDuration,
-      pomodorosUntilLongBreak: pomodorosUntilLongBreak,
+      remainingSeconds: 0,
+      status: TimerStatus.completed,
     );
-    if (_state.status == TimerStatus.initial) {
-      _state = _state.copyWith(remainingSeconds: _state.totalSeconds);
+
+    if (_settings.isSoundEnabled) {
+      _audioService.playBell();
     }
-    _saveState();
+
     notifyListeners();
   }
 }

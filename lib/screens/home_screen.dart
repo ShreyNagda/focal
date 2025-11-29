@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:focal/widgets/flip_clock.dart';
 import 'package:provider/provider.dart';
-import '../constants/colors.dart';
+import '../models/timer_settings.dart';
 import '../providers/timer_provider.dart';
-import '../models/timer_state.dart';
-import 'widgets/flip_timer.dart';
-import 'widgets/circular_timer.dart';
-import 'widgets/settings_dialog.dart';
+import '../widgets/circular_timer.dart';
+import '../widgets/settings_dialog.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -13,7 +12,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kColorBackground,
+      backgroundColor: const Color(0xFF121212), // kColorBackground
       body: SafeArea(
         child: Consumer<TimerProvider>(
           builder: (context, timerProvider, child) {
@@ -22,7 +21,7 @@ class HomeScreen extends StatelessWidget {
             return Column(
               children: [
                 // 1. Header
-                _HomeHeader(isFlipView: state.isFlipView),
+                _HomeHeader(),
 
                 const SizedBox(height: 20),
 
@@ -38,14 +37,14 @@ class HomeScreen extends StatelessWidget {
                 Expanded(
                   child: Center(
                     child: state.isFlipView
-                        ? FlipTimer(
-                            minutes: timerProvider.getMinutes(),
-                            seconds: timerProvider.getSeconds(),
+                        ? FlipClock(
+                            seconds:
+                                timerProvider.getSeconds() +
+                                timerProvider.getMinutes() * 60,
                           )
                         : CircularTimer(
                             remainingSeconds: state.remainingSeconds,
                             totalSeconds: state.totalSeconds,
-                            timerType: state.typeLabel,
                           ),
                   ),
                 ),
@@ -71,14 +70,8 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-// -----------------------------------------------------------------------------
-// Extracted Widgets
-// -----------------------------------------------------------------------------
-
 class _HomeHeader extends StatelessWidget {
-  final bool isFlipView;
-
-  const _HomeHeader({required this.isFlipView});
+  const _HomeHeader();
 
   @override
   Widget build(BuildContext context) {
@@ -92,27 +85,18 @@ class _HomeHeader extends StatelessWidget {
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: kColorTextPrimary,
+              color: Colors.white, // kColorTextPrimary
             ),
           ),
-          Row(
-            children: [
-              IconButton(
-                icon: Icon(
-                  isFlipView ? Icons.timer_outlined : Icons.flip,
-                  color: kColorTextSecondary,
-                ),
-                onPressed: context.read<TimerProvider>().toggleView,
-                tooltip: 'Switch Timer View',
-              ),
-              IconButton(
-                icon: const Icon(Icons.settings, color: kColorTextSecondary),
-                onPressed: () => showDialog(
-                  context: context,
-                  builder: (context) => const SettingsDialog(),
-                ),
-              ),
-            ],
+          IconButton(
+            icon: const Icon(
+              Icons.settings,
+              color: Colors.white54,
+            ), // kColorTextSecondary
+            onPressed: () => showDialog(
+              context: context,
+              builder: (context) => const SettingsDialog(),
+            ),
           ),
         ],
       ),
@@ -133,15 +117,15 @@ class _TimerTypeIndicator extends StatelessWidget {
 
     switch (currentType) {
       case TimerType.work:
-        color = kColorWork;
+        color = const Color(0xFFE53935); // kColorWork
         icon = Icons.work_outline;
         break;
       case TimerType.shortBreak:
-        color = kColorShortBreak;
+        color = const Color(0xFF26A69A); // kColorShortBreak
         icon = Icons.coffee_outlined;
         break;
       case TimerType.longBreak:
-        color = kColorLongBreak;
+        color = const Color(0xFF42A5F5); // kColorLongBreak
         icon = Icons.beach_access_outlined;
         break;
     }
@@ -192,7 +176,9 @@ class _PomodoroCounter extends StatelessWidget {
               height: 12,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: index < current ? kColorWork : kColorTextMuted,
+                color: index < current
+                    ? const Color(0xFFE53935) // kColorWork
+                    : Colors.white24, // kColorTextMuted
               ),
             ),
           ),
@@ -214,13 +200,13 @@ class _TimerControls extends StatelessWidget {
     Color modeColor;
     switch (state.currentType) {
       case TimerType.work:
-        modeColor = kColorWork.withAlpha(100);
+        modeColor = const Color(0xFFE53935).withAlpha(100); // kColorWork
         break;
       case TimerType.shortBreak:
-        modeColor = kColorShortBreak.withAlpha(100);
+        modeColor = const Color(0xFF26A69A).withAlpha(100); // kColorShortBreak
         break;
       case TimerType.longBreak:
-        modeColor = kColorLongBreak.withAlpha(100);
+        modeColor = const Color(0xFF42A5F5).withAlpha(100); // kColorLongBreak
         break;
     }
 
@@ -232,9 +218,9 @@ class _TimerControls extends StatelessWidget {
             _NextBlockButton(
               onPressed: () async {
                 await provider.startNextBlock();
-                await provider.startTimer();
+                provider.startTimer();
               },
-              color: kColorLongBreak,
+              color: const Color(0xFF42A5F5), // kColorLongBreak
             )
           else
             Row(
@@ -243,7 +229,9 @@ class _TimerControls extends StatelessWidget {
                 _MainControlButton(
                   label: state.status == TimerStatus.running
                       ? 'Pause'
-                      : 'Start',
+                      : state.status == TimerStatus.paused
+                      ? "Resume"
+                      : "Start",
                   icon: state.status == TimerStatus.running
                       ? Icons.pause
                       : Icons.play_arrow,
@@ -324,7 +312,7 @@ class _NextBlockButton extends StatelessWidget {
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
-        foregroundColor: Colors.white.withAlpha(100),
+        foregroundColor: Colors.white.withAlpha(250),
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
       ),
@@ -348,8 +336,11 @@ class _SecondaryButton extends StatelessWidget {
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        foregroundColor: kColorTextSecondary,
-        side: const BorderSide(color: kColorTextMuted, width: 2),
+        foregroundColor: Colors.white54, // kColorTextSecondary
+        side: const BorderSide(
+          color: Colors.white24,
+          width: 2,
+        ), // kColorTextMuted
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
       ),

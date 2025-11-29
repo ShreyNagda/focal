@@ -1,21 +1,21 @@
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 
 class AudioService {
-  static final AudioPlayer _player = AudioPlayer();
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
-  static Future<void> playBell() async {
+  Future<void> playBell() async {
     try {
-      await _player.play(AssetSource('sounds/bell.mp3'));
+      // Stop any currently playing sound to allow rapid replay
+      await _audioPlayer.stop();
+      await _audioPlayer.play(AssetSource('sounds/bell.mp3'));
     } catch (e) {
-      print('Error playing sound: $e');
+      print(e);
+      debugPrint("Error playing sound: $e");
     }
   }
 
-  static Future<void> stopBell() async {
-    await _player.stop();
-  }
-
-  static void dispose() {
-    _player.dispose();
+  void dispose() {
+    _audioPlayer.dispose();
   }
 }

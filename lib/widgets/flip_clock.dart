@@ -1,18 +1,20 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-class FlipTimer extends StatelessWidget {
-  final int minutes;
+class FlipClock extends StatelessWidget {
   final int seconds;
 
-  const FlipTimer({super.key, required this.minutes, required this.seconds});
+  const FlipClock({super.key, required this.seconds});
 
   @override
   Widget build(BuildContext context) {
+    final int minutes = seconds ~/ 60;
+    final int remSeconds = seconds % 60;
+
     final minutesTens = (minutes / 10).floor();
     final minutesOnes = minutes % 10;
-    final secondsTens = (seconds / 10).floor();
-    final secondsOnes = seconds % 10;
+    final secondsTens = (remSeconds / 10).floor();
+    final secondsOnes = remSeconds % 10;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -51,7 +53,7 @@ class _FlipDigitState extends State<FlipDigit>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 450),
+      duration: const Duration(milliseconds: 800),
     );
     _currentDigit = widget.digit;
     _nextDigit = widget.digit;
@@ -172,8 +174,8 @@ class _DigitHalf extends StatelessWidget {
         alignment: isTop ? Alignment.topCenter : Alignment.bottomCenter,
         heightFactor: 0.5,
         child: Container(
-          width: 80,
-          height: 120,
+          width: 100,
+          height: 140,
           decoration: const BoxDecoration(color: Color(0xFF2C3E50)),
           child: Stack(
             alignment: Alignment.center,
@@ -210,8 +212,8 @@ class _DigitHalf extends StatelessWidget {
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  height: 1,
-                  child: Container(color: Colors.black.withAlpha(100)),
+                  height: 2, // Thicker divider
+                  child: Container(color: Colors.black.withAlpha(75)),
                 )
               else
                 Positioned(

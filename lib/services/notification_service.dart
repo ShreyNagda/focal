@@ -1,89 +1,126 @@
-import 'dart:async';
+import 'dart:ui';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:focal/constants/strings.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class NotificationService {
-  static final FlutterLocalNotificationsPlugin _notifications =
+  static final NotificationService _instance = NotificationService._internal();
+  factory NotificationService() => _instance;
+  NotificationService._internal();
+
+  final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  static Future<void> initialize() async {
-    if (kIsWeb) return;
+  static const String channelId = 'pomodoro_timer_channel';
+  static const String channelName = 'Pomodoro Timer';
 
-    if (await Permission.notification.isDenied) {
+  Future<void> requestNotificationPermission() async {
+    final status = await Permission.notification.status;
+
+    if (!status.isGranted) {
       await Permission.notification.request();
     }
-
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-
-    await _notifications.initialize(
-      const InitializationSettings(android: androidSettings, iOS: iosSettings),
-      // No onDidReceiveNotificationResponse needed for actions anymore
-    );
   }
 
-  /// Shows the sticky timer notification (No Buttons)
-  static Future<void> showTimerNotification(String title, String body) async {
-    if (kIsWeb) return;
+  Future<void> initialize() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    final androidDetails = AndroidNotificationDetails(
-      kChannelIdTimer,
-      kChannelNameTimer,
+    const InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+
+    await _notificationsPlugin.initialize(initializationSettings);
+
+    final AndroidNotificationChannel channel = AndroidNotificationChannel(
+      channelId,
+      channelName,
+      description: 'Active Pomodoro Timer',
+      importance: Importance.low,
+      playSound: false,
+      enableVibration: false,
+      showBadge: false,
+    );
+
+    await _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(channel);
+  }
+
+  Future<void> showChronometerNotification(
+    int targetEpochMillis,
+    int durationSeconds,
+    String title,
+    String body,
+  ) async {
+    final androidPlatformChannelSpecifics = AndroidNotificationDetails(
+      channelId,
+      channelName,
       importance: Importance.low,
       priority: Priority.low,
       ongoing: true,
       autoCancel: false,
-      onlyAlertOnce: true,
+      usesChronometer: true,
+      chronometerCountDown: true,
+      when: targetEpochMillis,
+      showWhen: true,
+      color: const Color(0xFFE53935),
+    );
+
+    final platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+    );
+
+    await _notificationsPlugin.show(888, title, body, platformChannelSpecifics);
+  }
+
+  // UPDATED: Now accepts title and body
+  Future<void> showPausedNotification(String title, String body) async {
+    final androidPlatformChannelSpecifics = AndroidNotificationDetails(
+      channelId,
+      channelName,
+      importance: Importance.low,
+      priority: Priority.low,
+      ongoing: true,
+      autoCancel: false,
+      usesChronometer: false, // Static time
       showWhen: false,
+      color: const Color(0xFFE53935),
     );
 
-    await _notifications.show(
-      kNotificationId,
+    final platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+    );
+
+    await _notificationsPlugin.show(
+      888, // Overwrites the running notification
       title,
       body,
-      NotificationDetails(android: androidDetails),
+      platformChannelSpecifics,
     );
   }
 
-  /// Shows the completion notification
-  static Future<void> showCompletionNotification(
-    String title,
-    String body,
-  ) async {
-    if (kIsWeb) return;
-
-    const androidDetails = AndroidNotificationDetails(
-      kChannelIdCompletion,
-      kChannelNameCompletion,
-      importance: Importance.high,
+  Future<void> showFinishedNotification({
+    required String title,
+    required String body,
+    bool isSoundEnabled = false,
+  }) async {
+    final androidPlatformChannelSpecifics = AndroidNotificationDetails(
+      'pomodoro_done_channel',
+      'Timer Finished',
+      importance: Importance.max,
       priority: Priority.high,
-      playSound: true,
+      playSound: isSoundEnabled,
       enableVibration: true,
-      fullScreenIntent: true,
+    );
+    final platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
     );
 
-    // We use ID 0 for completion so it doesn't conflict with ID 1
-    await _notifications.show(
-      kNotificationId,
-      title,
-      body,
-      const NotificationDetails(android: androidDetails),
-    );
+    await _notificationsPlugin.show(888, title, body, platformChannelSpecifics);
   }
 
-  static Future<void> cancelTimerNotification() async {
-    await _notifications.cancel(kNotificationId);
-  }
-
-  static Future<void> cancelAll() async {
-    await _notifications.cancelAll();
+  Future<void> cancelNotification() async {
+    await _notificationsPlugin.cancel(888);
   }
 }

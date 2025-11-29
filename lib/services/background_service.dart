@@ -1,112 +1,120 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'dart:io';
+import 'dart:ui';
+import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../constants/strings.dart';
+import 'storage_service.dart';
 import 'notification_service.dart';
 
+@pragma('vm:entry-point')
+void onStart(ServiceInstance service) async {
+  // CRITICAL: Exit immediately if running on Web.
+  // This prevents accessing dart:io Platform or initializing plugins not supported on Web.
+  if (kIsWeb) return;
+
+  if (Platform.isIOS) {
+    DartPluginRegistrant.ensureInitialized();
+  }
+
+  final prefs = await SharedPreferences.getInstance();
+  final storage = StorageService(prefs);
+  final notificationService = NotificationService();
+  await notificationService.initialize();
+
+  Timer? finishTimer;
+
+  Future<void> stopEverything() async {
+    finishTimer?.cancel();
+    await notificationService.cancelNotification();
+    await storage.clearTimerState();
+    service.stopSelf();
+  }
+
+  service.on('pause').listen((event) async {
+    finishTimer?.cancel();
+
+    // Extract dynamic pause messages
+    final String title = event?['title'] ?? 'Timer Paused';
+    final String body = event?['body'] ?? 'Tap to resume';
+
+    await notificationService.showPausedNotification(title, body);
+
+    if (service is AndroidServiceInstance) {
+      service.setForegroundNotificationInfo(title: title, content: body);
+    }
+  });
+
+  service.on('start').listen((event) async {
+    if (event == null) return;
+
+    final int durationSeconds = event['duration'];
+    final String title = event['title'] ?? 'Focus Session';
+    final String body = event['body'] ?? 'Stay focused!';
+
+    final String finishTitle = event['finishTitle'] ?? 'Session Complete';
+    final String finishBody = event['finishBody'] ?? 'Time to take a break.';
+
+    final bool enableSound = event['enableSound'] ?? true;
+
+    final DateTime now = DateTime.now();
+    final DateTime targetTime = now.add(Duration(seconds: durationSeconds));
+    final int targetEpoch = targetTime.millisecondsSinceEpoch;
+
+    await storage.saveTimerState(
+      targetEpoch: targetEpoch,
+      totalSeconds: durationSeconds,
+    );
+
+    if (service is AndroidServiceInstance) {
+      service.setForegroundNotificationInfo(title: title, content: body);
+    }
+
+    await notificationService.showChronometerNotification(
+      targetEpoch,
+      durationSeconds,
+      title,
+      body,
+    );
+
+    finishTimer?.cancel();
+    finishTimer = Timer(Duration(seconds: durationSeconds), () async {
+      await notificationService.showFinishedNotification(
+        title: finishTitle,
+        body: finishBody,
+        isSoundEnabled: enableSound,
+      );
+      await storage.clearTimerState();
+      service.stopSelf();
+    });
+  });
+
+  service.on('stop').listen((event) async {
+    await stopEverything();
+  });
+}
+
 class BackgroundService {
-  static Future<void> initializeService() async {
+  static Future<void> initialize() async {
+    // CRITICAL: Exit immediately if running on Web to avoid crashes
+    if (kIsWeb) return;
+
     final service = FlutterBackgroundService();
-    if (await service.isRunning()) return;
 
     await service.configure(
       androidConfiguration: AndroidConfiguration(
-        onStart: _onStart,
+        onStart: onStart,
         autoStart: false,
         isForegroundMode: true,
-        notificationChannelId: kChannelIdTimer,
-        initialNotificationTitle: kChannelNameTimer,
-        initialNotificationContent: '',
-        foregroundServiceNotificationId: kNotificationId,
+        notificationChannelId: 'pomodoro_timer_channel',
+        initialNotificationTitle: 'Focus Session',
+        initialNotificationContent: 'Ready to focus...',
+        foregroundServiceNotificationId: 888,
       ),
       iosConfiguration: IosConfiguration(
         autoStart: false,
-        onBackground: (service) => true,
+        onForeground: onStart,
       ),
     );
   }
-
-  static Future<void> startBackgroundTimer(
-    int seconds,
-    String currentLabel,
-    String nextLabel,
-  ) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final targetTime = DateTime.now().add(Duration(seconds: seconds));
-
-    await prefs.setInt(kKeyTargetTimestamp, targetTime.millisecondsSinceEpoch);
-    await prefs.setString(kKeyCurrentLabel, currentLabel);
-    await prefs.setString(kKeyNextLabel, nextLabel);
-
-    final service = FlutterBackgroundService();
-    await service.startService();
-  }
-
-  /// STOP: Called when App comes to FOREGROUND
-  static Future<void> stopBackgroundTimer() async {
-    final service = FlutterBackgroundService();
-    service.invoke(kMethodStopService);
-  }
-}
-
-@pragma('vm:entry-point')
-void _onStart(ServiceInstance service) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  final prefs = await SharedPreferences.getInstance();
-
-  // Load labels
-  String currentTitle = prefs.getString(kKeyCurrentLabel) ?? "Pomodoro Timer";
-  String nextBlock = prefs.getString(kKeyNextLabel) ?? "Session";
-
-  if (service is AndroidServiceInstance) {
-    service.setAsForegroundService();
-    service.setForegroundNotificationInfo(title: currentTitle, content: "");
-  }
-
-  service.on(kMethodStopService).listen((event) {
-    service.stopSelf();
-  });
-
-  Timer.periodic(const Duration(seconds: 1), (timer) async {
-    final targetEpoch = prefs.getInt(kKeyTargetTimestamp);
-    if (targetEpoch == null) {
-      timer.cancel();
-      service.stopSelf();
-      return;
-    }
-
-    final target = DateTime.fromMillisecondsSinceEpoch(targetEpoch);
-    final now = DateTime.now();
-    final remaining = target.difference(now).inSeconds;
-
-    if (remaining >= 0) {
-      if (service is AndroidServiceInstance) {
-        // 1. Update Notification with Remaining Time
-        service.setForegroundNotificationInfo(
-          title: currentTitle,
-          content: "Remaining: ${_formatTime(remaining)}",
-        );
-      }
-    } else {
-      // 2. Timer Completed
-      await prefs.remove(kKeyTargetTimestamp);
-
-      // Show Completion Notification with Next Block info
-      await NotificationService.showCompletionNotification(
-        "Session Complete! 🎉",
-        "Up Next: $nextBlock",
-      );
-
-      service.stopSelf();
-      timer.cancel();
-    }
-  });
-}
-
-String _formatTime(int totalSeconds) {
-  final m = totalSeconds ~/ 60;
-  final s = totalSeconds % 60;
-  return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
 }
