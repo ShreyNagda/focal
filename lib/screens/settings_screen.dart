@@ -65,12 +65,15 @@ class SettingsScreen extends StatelessWidget {
                   child: ListView(
                     padding: const EdgeInsets.all(10),
                     children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton.icon(
-                          icon: const Icon(Icons.arrow_back_ios),
-                          onPressed: () => Navigator.pop(context),
-                          label: Text("Back"),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            icon: const Icon(Icons.arrow_back_ios),
+                            onPressed: () => Navigator.pop(context),
+                            label: Text("Back"),
+                          ),
                         ),
                       ),
 

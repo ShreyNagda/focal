@@ -1,12 +1,10 @@
 // Timer Controls (formerly _TimerControls)
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:focal/models/timer_state.dart';
+import 'package:focal/providers/timer_provider.dart';
 import 'package:focal/screens/settings_screen.dart';
 import 'package:toastification/toastification.dart';
-
-import '../../../providers/timer_provider.dart';
 
 class TimerControls extends StatelessWidget {
   final TimerState state;
@@ -19,9 +17,17 @@ class TimerControls extends StatelessWidget {
       showDialog(
         context: context,
         builder: (_) => CupertinoAlertDialog(
-          title: const Text("Skip break"),
-          content: const Text(
+          title: Text(
+            "Skip break",
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge!.copyWith(fontWeight: FontWeight.bold),
+          ),
+          content: Text(
             "Do you want to skip the break and start the next work session?",
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge!.copyWith(fontWeight: FontWeight.w400),
           ),
           actions: [
             CupertinoDialogAction(
@@ -45,7 +51,7 @@ class TimerControls extends StatelessWidget {
       final theme = Theme.of(context);
 
       toastification.show(
-        context: context, // optional if you use ToastificationWrapper
+        context: context,
         title: Text('Cannot skip work sessions!'),
         autoCloseDuration: const Duration(seconds: 3),
         alignment: Alignment.bottomCenter,
@@ -61,8 +67,19 @@ class TimerControls extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => CupertinoAlertDialog(
-        title: const Text("Skip break"),
-        content: Text("Do you want to restart the $type"),
+        title: Text(
+          "Restart $type",
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge!.copyWith(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          "Do you really want to skip the $type session?",
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge!.copyWith(fontWeight: FontWeight.w400),
+        ),
+
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(context),
@@ -80,30 +97,6 @@ class TimerControls extends StatelessWidget {
         ],
       ),
     );
-    // showDialog(
-    //   context: context,
-    //   builder: (_) {
-    //     return CupertinoAlertDialog(
-    //       title: Text("Restart $type session"),
-    //       content: Text("Do you want to restart the $type session?"),
-    //       actions: [
-    //         CupertinoDialogAction(
-    //           child: Text("Cancel"),
-    //           onPressed: () {
-    //             Navigator.pop(context);
-    //           },
-    //         ),
-    //         CupertinoDialogAction(
-    //           child: Text("Yes, Restart"),
-    //           onPressed: () {
-    //             provider.resetTimer();
-    //             Navigator.pop(context);
-    //           },
-    //         ),
-    //       ],
-    //     );
-    // },
-    // );
   }
 
   @override

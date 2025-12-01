@@ -8,10 +8,11 @@ class AudioService {
         playerId: 'bell_${DateTime.now().millisecondsSinceEpoch}',
       );
 
-      await player.play(
-        AssetSource('sounds/bell.mp3'),
-        mode: PlayerMode.lowLatency,
-      );
+      if (kIsWeb) {
+        await player.play(UrlSource('assets/sounds/bell.mp3'));
+      } else {
+        await player.play(AssetSource('sounds/bell.mp3'));
+      }
 
       // Automatically Dispose AFTER playback finishes
       // No dispose method required
