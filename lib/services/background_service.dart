@@ -31,20 +31,6 @@ void onStart(ServiceInstance service) async {
     service.stopSelf();
   }
 
-  service.on('pause').listen((event) async {
-    finishTimer?.cancel();
-
-    // Extract dynamic pause messages
-    final String title = event?['title'] ?? 'Timer Paused';
-    final String body = event?['body'] ?? 'Tap to resume';
-
-    await notificationService.showPausedNotification(title, body);
-
-    if (service is AndroidServiceInstance) {
-      service.setForegroundNotificationInfo(title: title, content: body);
-    }
-  });
-
   service.on('start').listen((event) async {
     if (event == null) return;
 
@@ -89,6 +75,20 @@ void onStart(ServiceInstance service) async {
     });
   });
 
+  service.on('pause').listen((event) async {
+    finishTimer?.cancel();
+
+    // Extract dynamic pause messages
+    final String title = event?['title'] ?? 'Timer Paused';
+    final String body = event?['body'] ?? 'Tap to resume';
+
+    await notificationService.showPausedNotification(title, body);
+
+    if (service is AndroidServiceInstance) {
+      service.setForegroundNotificationInfo(title: title, content: body);
+    }
+  });
+
   service.on('stop').listen((event) async {
     await stopEverything();
   });
@@ -104,7 +104,7 @@ class BackgroundService {
     await service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
-        autoStart: false,
+        autoStart: true,
         isForegroundMode: true,
         notificationChannelId: 'pomodoro_timer_channel',
         initialNotificationTitle: 'Focus Session',

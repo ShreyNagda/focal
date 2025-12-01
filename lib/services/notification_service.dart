@@ -37,7 +37,7 @@ class NotificationService {
       importance: Importance.low,
       playSound: false,
       enableVibration: false,
-      showBadge: false,
+      showBadge: true,
     );
 
     await _notificationsPlugin
@@ -63,27 +63,6 @@ class NotificationService {
       usesChronometer: true,
       chronometerCountDown: true,
       when: targetEpochMillis,
-      showWhen: true,
-      color: const Color(0xFFE53935),
-    );
-
-    final platformChannelSpecifics = NotificationDetails(
-      android: androidPlatformChannelSpecifics,
-    );
-
-    await _notificationsPlugin.show(888, title, body, platformChannelSpecifics);
-  }
-
-  // UPDATED: Now accepts title and body
-  Future<void> showPausedNotification(String title, String body) async {
-    final androidPlatformChannelSpecifics = AndroidNotificationDetails(
-      channelId,
-      channelName,
-      importance: Importance.low,
-      priority: Priority.low,
-      ongoing: true,
-      autoCancel: false,
-      usesChronometer: false, // Static time
       showWhen: false,
       color: const Color(0xFFE53935),
     );
@@ -93,8 +72,36 @@ class NotificationService {
     );
 
     await _notificationsPlugin.show(
-      888, // Overwrites the running notification
-      title,
+      888,
+      "$title session",
+      body,
+      platformChannelSpecifics,
+    );
+  }
+
+  // UPDATED: Now accepts title and body
+  Future<void> showPausedNotification(String title, String body) async {
+    final androidPlatformChannelSpecifics = AndroidNotificationDetails(
+      channelId,
+      channelName,
+      importance: Importance.high,
+      priority: Priority.max,
+      ongoing: true,
+      autoCancel: false,
+      usesChronometer: false, // Static time
+      showWhen: true,
+      color: const Color(0xFFE53935),
+    );
+
+    final platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+    );
+
+    print("Paused notification");
+
+    await _notificationsPlugin.show(
+      888,
+      "$title session - Paused",
       body,
       platformChannelSpecifics,
     );
@@ -116,11 +123,11 @@ class NotificationService {
     final platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
     );
-
-    await _notificationsPlugin.show(888, title, body, platformChannelSpecifics);
+    print("Finished notification");
+    await _notificationsPlugin.show(999, title, body, platformChannelSpecifics);
   }
 
-  Future<void> cancelNotification() async {
-    await _notificationsPlugin.cancel(888);
+  Future<void> cancelNotification({int id = 888}) async {
+    await _notificationsPlugin.cancel(id);
   }
 }

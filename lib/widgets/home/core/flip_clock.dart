@@ -16,19 +16,23 @@ class FlipClock extends StatelessWidget {
     final secondsTens = (remSeconds / 10).floor();
     final secondsOnes = remSeconds % 10;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        FlipDigit(digit: minutesTens),
-        const SizedBox(width: 6),
-        FlipDigit(digit: minutesOnes),
-        const SizedBox(width: 16),
-        const TimeSeparator(),
-        const SizedBox(width: 16),
-        FlipDigit(digit: secondsTens),
-        const SizedBox(width: 6),
-        FlipDigit(digit: secondsOnes),
-      ],
+    // RESPONSIVE WRAPPER
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          FlipDigit(digit: minutesTens),
+          const SizedBox(width: 6),
+          FlipDigit(digit: minutesOnes),
+          const SizedBox(width: 16),
+          const TimeSeparator(),
+          const SizedBox(width: 16),
+          FlipDigit(digit: secondsTens),
+          const SizedBox(width: 6),
+          FlipDigit(digit: secondsOnes),
+        ],
+      ),
     );
   }
 }
@@ -53,9 +57,7 @@ class _FlipDigitState extends State<FlipDigit>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(
-        milliseconds: 600,
-      ), // Slightly faster for responsiveness
+      duration: const Duration(milliseconds: 600),
     );
     _currentDigit = widget.digit;
     _nextDigit = widget.digit;
@@ -101,7 +103,7 @@ class _FlipDigitState extends State<FlipDigit>
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(75),
+                color: Colors.black.withOpacity(0.2),
                 blurRadius: 10,
                 offset: const Offset(0, 5),
               ),
@@ -109,28 +111,20 @@ class _FlipDigitState extends State<FlipDigit>
           ),
           child: Stack(
             children: [
-              // 1. Static Top Half of NEXT digit (Always at Top)
               Align(
                 alignment: Alignment.topCenter,
                 child: _DigitHalf(digit: nextDigit, isTop: true),
               ),
-
-              // 2. Static Bottom Half of NEXT digit (Always at Bottom)
               Align(
                 alignment: Alignment.bottomCenter,
                 child: _DigitHalf(digit: nextDigit, isTop: false),
               ),
-
-              // 3. Static Bottom Half of CURRENT digit (At Bottom, covered by flap)
               if (value < 0.5)
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: _DigitHalf(digit: displayDigit, isTop: false),
                 ),
-
-              // 4. MOVING FLAPS
               if (value < 0.5)
-                // Top Half of CURRENT digit flipping DOWN (Aligned Top)
                 Align(
                   alignment: Alignment.topCenter,
                   child: Transform(
@@ -140,7 +134,6 @@ class _FlipDigitState extends State<FlipDigit>
                   ),
                 )
               else
-                // Bottom Half of NEXT digit flipping DOWN (Aligned Bottom)
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: Transform(
@@ -165,6 +158,14 @@ class _DigitHalf extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // USE THEME COLORS
+    final cardColor = Theme.of(context).colorScheme.tertiaryContainer;
+    final textColor = Theme.of(context).colorScheme.onTertiaryContainer;
+
+    // Calculate a slightly darker variant for gradients/shadows based on brightness
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final shadowColor = isDark ? Colors.black : Colors.grey.shade400;
+
     return ClipRRect(
       borderRadius: BorderRadius.vertical(
         top: isTop ? const Radius.circular(8) : Radius.zero,
@@ -176,34 +177,32 @@ class _DigitHalf extends StatelessWidget {
         child: Container(
           width: 80,
           height: 120,
-          decoration: const BoxDecoration(color: Color(0xFF2C3E50)),
+          decoration: BoxDecoration(color: cardColor),
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Background Gradient
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: isTop
-                        ? [const Color(0xFF2C3E50), const Color(0xFF34495E)]
-                        : [const Color(0xFF34495E), const Color(0xFF2C3E50)],
+                        ? [cardColor, Color.lerp(cardColor, shadowColor, 0.2)!]
+                        : [Color.lerp(cardColor, shadowColor, 0.2)!, cardColor],
                   ),
                 ),
               ),
 
-              // Text
               Text(
                 '$digit',
                 style: TextStyle(
                   fontSize: 80,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  height: 1.0, // Tight height for better vertical centering
+                  color: textColor,
+                  height: 1.0,
                   shadows: [
                     Shadow(
-                      color: Colors.black.withAlpha(50),
+                      color: shadowColor.withOpacity(0.3),
                       offset: const Offset(0, 2),
                       blurRadius: 4,
                     ),
@@ -211,19 +210,18 @@ class _DigitHalf extends StatelessWidget {
                 ),
               ),
 
-              // Divider / Seam Visuals
               if (isTop)
                 Positioned(
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  height: 4, // Thicker hinge for top half
+                  height: 4,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.black.withAlpha(100),
+                      color: shadowColor.withOpacity(0.4),
                       border: Border(
                         bottom: BorderSide(
-                          color: Colors.black.withAlpha(130),
+                          color: shadowColor.withOpacity(0.5),
                           width: 1,
                         ),
                       ),
@@ -235,8 +233,8 @@ class _DigitHalf extends StatelessWidget {
                   top: 0,
                   left: 0,
                   right: 0,
-                  height: 1, // Subtle highlight for bottom half edge
-                  child: Container(color: Colors.white.withAlpha(40)),
+                  height: 1,
+                  child: Container(color: Colors.white.withOpacity(0.15)),
                 ),
             ],
           ),
@@ -253,20 +251,26 @@ class TimeSeparator extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: [_buildDot(), const SizedBox(height: 20), _buildDot()],
+      children: [
+        _buildDot(context),
+        const SizedBox(height: 20),
+        _buildDot(context),
+      ],
     );
   }
 
-  Widget _buildDot() {
+  Widget _buildDot(BuildContext context) {
     return Container(
       width: 10,
       height: 10,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white70,
+        color: Theme.of(
+          context,
+        ).colorScheme.onSurface.withOpacity(0.5), // Themed Dot
         boxShadow: [
           BoxShadow(
-            color: Colors.white.withAlpha(76),
+            color: Theme.of(context).shadowColor.withOpacity(0.2),
             blurRadius: 6,
             spreadRadius: 1,
           ),

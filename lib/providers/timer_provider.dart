@@ -1,35 +1,99 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart'; // For kIsWeb
+import 'package:flutter/foundation.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import '../models/timer_settings.dart';
+import 'package:focal/services/notification_service.dart';
+import '../models/timer_config.dart'; // NEW IMPORT
+import '../models/app_config.dart'; // NEW IMPORT
+import '../models/timer_state.dart'; // NEW IMPORT for enums/state
 import '../services/storage_service.dart';
 import '../services/audio_service.dart';
+import '../providers/config_provider.dart'; // ADDED IMPORT
+
+// Assuming TimerType and TimerStatus enums are now in timer_state.dart
+// and TimerState is also in that file.
 
 class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
   final StorageService _storage;
-  final AudioService _audioService = AudioService();
+  final ConfigProvider _configProvider; // ADDED DEPENDENCY
 
-  TimerSettings _settings = TimerSettings();
+  TimerConfig _timerConfig = const TimerConfig(); // Replaced _settings
+  AppConfig _appConfig = const AppConfig(); // NEW config for view/theme/sound
   late TimerState _state;
   Timer? _uiTicker;
 
-  TimerProvider(this._storage) {
+  // MODIFIED CONSTRUCTOR: Now requires ConfigProvider
+  TimerProvider(this._storage, this._configProvider) {
     WidgetsBinding.instance.addObserver(this);
-    _state = TimerState.initial(25, 4);
+
+    // Initialize config from ConfigProvider at creation time
+    _timerConfig = _configProvider.timerConfig;
+    _appConfig = _configProvider.appConfig;
+
+    // Use initial values from TimerConfig for TimerState setup
+    _state = TimerState.initial(
+      _timerConfig.workDurationMinutes,
+      _timerConfig.workIntervalsUntilLongBreak,
+      _appConfig.isFlipStyle,
+    );
     _init();
+  }
+
+  // NEW METHOD: Handles updates received from ConfigProvider
+  void onConfigUpdate(TimerConfig newTimerConfig, AppConfig newAppConfig) {
+    // Check if any core duration settings have changed
+    final bool timerConfigChanged =
+        _timerConfig.workDurationMinutes !=
+            newTimerConfig.workDurationMinutes ||
+        _timerConfig.shortBreakDurationMinutes !=
+            newTimerConfig.shortBreakDurationMinutes ||
+        _timerConfig.longBreakDurationMinutes !=
+            newTimerConfig.longBreakDurationMinutes ||
+        _timerConfig.workIntervalsUntilLongBreak !=
+            newTimerConfig.workIntervalsUntilLongBreak;
+
+    // Check if any App config settings have changed (for theme/sound/view)
+    final bool appConfigChanged =
+        _appConfig.themeMode != newAppConfig.themeMode ||
+        _appConfig.isFlipStyle != newAppConfig.isFlipStyle ||
+        _appConfig.isSoundEnabled != newAppConfig.isSoundEnabled;
+
+    // Update internal configurations
+    _timerConfig = newTimerConfig;
+    _appConfig = newAppConfig;
+
+    // FIX: If TimerConfig changed AND the timer is in the initial state,
+    // update the displayed duration immediately.
+    if (timerConfigChanged && _state.status == TimerStatus.initial) {
+      _resetStateToCurrentSettings();
+    }
+    // Also notify listeners if AppConfig changed (e.g., theme mode for PomodoroApp, flip view)
+    else if (appConfigChanged) {
+      notifyListeners();
+    }
+  }
+
+  // --- Theme Helper ---
+  ThemeMode get themeMode {
+    switch (_appConfig.themeMode) {
+      // Use _appConfig
+      case 'light':
+        return ThemeMode.light;
+      case 'dark':
+        return ThemeMode.dark;
+      default:
+        return ThemeMode.system;
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _audioService.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Only attempt to sync with background service on Mobile
     if (!kIsWeb &&
         state == AppLifecycleState.paused &&
         _state.status == TimerStatus.running) {
@@ -38,13 +102,17 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   TimerState get state => _state;
-  TimerSettings get settings => _settings;
+  TimerConfig get timerConfig => _timerConfig; // New getter
+  AppConfig get appConfig => _appConfig; // New getter
 
   int getMinutes() => _state.remainingSeconds ~/ 60;
   int getSeconds() => _state.remainingSeconds % 60;
 
   void _init() {
-    _settings = _storage.loadSettings();
+    // Load both configs (assuming StorageService is updated)
+    _timerConfig = _storage.loadTimerConfig();
+    _appConfig = _storage.loadAppConfig();
+
     _resetStateToCurrentSettings();
 
     if (_storage.getIsRunning()) {
@@ -59,9 +127,9 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
 
         if (target.isAfter(now)) {
           TimerType recoveredType = TimerType.work;
-          if (savedTotal == _settings.shortBreakDurationMinutes * 60) {
+          if (savedTotal == _timerConfig.shortBreakDurationMinutes * 60) {
             recoveredType = TimerType.shortBreak;
-          } else if (savedTotal == _settings.longBreakDurationMinutes * 60) {
+          } else if (savedTotal == _timerConfig.longBreakDurationMinutes * 60) {
             recoveredType = TimerType.longBreak;
           }
 
@@ -69,7 +137,7 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
             status: TimerStatus.running,
             totalSeconds: savedTotal,
             currentType: recoveredType,
-            isFlipView: _settings.isFlipStyle,
+            // Flip view setting comes from AppConfig
           );
 
           _startUiTicker(target);
@@ -82,25 +150,8 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
-  void toggleView() {
-    final newStyle = !_state.isFlipView;
-    _state = _state.copyWith(isFlipView: newStyle);
-    _settings.isFlipStyle = newStyle;
-    _storage.saveSettings(_settings);
-    notifyListeners();
-  }
-
-  void updateSettings(TimerSettings newSettings) {
-    _settings = newSettings;
-    _storage.saveSettings(newSettings);
-
-    _state = _state.copyWith(isFlipView: newSettings.isFlipStyle);
-
-    if (_state.status == TimerStatus.initial) {
-      _resetStateToCurrentSettings();
-    }
-    notifyListeners();
-  }
+  // REMOVED: toggleView, updateTimerConfig, and updateAppConfig
+  // These functions are now handled by ConfigProvider and onConfigUpdate
 
   Future<void> startTimer() async {
     if (_state.status == TimerStatus.running) return;
@@ -110,8 +161,7 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
 
     _state = _state.copyWith(status: TimerStatus.running);
     notifyListeners();
-
-    // WEB GUARD: Only run service logic on mobile
+    NotificationService().cancelNotification(id: 999);
     if (!kIsWeb) {
       final service = FlutterBackgroundService();
       if (!await service.isRunning()) {
@@ -120,7 +170,6 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
       _sendBackgroundStartCommand();
     }
 
-    // Local ticker runs on both Web and Mobile
     _startUiTicker(target);
   }
 
@@ -131,7 +180,8 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
     if (_state.currentType == TimerType.work) {
       finishTitle = "Focus Complete";
       int nextPomos = _state.currentPomodoros + 1;
-      if (nextPomos >= _settings.workIntervalsUntilLongBreak) {
+      if (nextPomos >= _timerConfig.workIntervalsUntilLongBreak) {
+        // Use _timerConfig
         finishBody = "Great job! Time for a long break.";
       } else {
         finishBody = "Good work. Take a short break.";
@@ -149,17 +199,16 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
           : 'Relax & recharge.',
       'finishTitle': finishTitle,
       'finishBody': finishBody,
-      'isSoundEnabled': _settings.isSoundEnabled,
+      'enableSound': _appConfig.isSoundEnabled, // Use _appConfig
     });
   }
 
   void pauseTimer() {
     _uiTicker?.cancel();
 
-    // WEB GUARD
     if (!kIsWeb) {
       FlutterBackgroundService().invoke('pause', {
-        'title': '${_state.typeLabel} - Paused',
+        'title': '${_state.typeLabel} session - Paused',
         'body': 'Tap to resume',
       });
     }
@@ -168,10 +217,22 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
+  Future<void> skipBreak() async {
+    if (_state.currentType != TimerType.work) {
+      // 1. Stop all current ticking and background services
+      _uiTicker?.cancel();
+      if (!kIsWeb) {
+        FlutterBackgroundService().invoke('stop');
+      }
+      // 2. Clear storage and transition to the next block (which will be 'work')
+      await _storage.clearTimerState();
+      await startNextBlock();
+    }
+  }
+
   void resetTimer() {
     _uiTicker?.cancel();
 
-    // WEB GUARD
     if (!kIsWeb) {
       FlutterBackgroundService().invoke('stop');
     }
@@ -193,7 +254,8 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
 
     if (_state.currentType == TimerType.work) {
       nextPomodoros++;
-      if (nextPomodoros >= _settings.workIntervalsUntilLongBreak) {
+      if (nextPomodoros >= _timerConfig.workIntervalsUntilLongBreak) {
+        // Use _timerConfig
         nextType = TimerType.longBreak;
       } else {
         nextType = TimerType.shortBreak;
@@ -213,8 +275,9 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
       remainingSeconds: nextDuration,
       totalSeconds: nextDuration,
       currentPomodoros: nextPomodoros,
-      pomodorosUntilLongBreak: _settings.workIntervalsUntilLongBreak,
-      isFlipView: _settings.isFlipStyle,
+      pomodorosUntilLongBreak:
+          _timerConfig.workIntervalsUntilLongBreak, // Use _timerConfig
+      // isFlipView is no longer a state parameter
     );
     notifyListeners();
   }
@@ -222,25 +285,27 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
   int _getDurationForType(TimerType type) {
     switch (type) {
       case TimerType.work:
-        return _settings.workDurationMinutes * 60;
+        return _timerConfig.workDurationMinutes * 60; // Use _timerConfig
       case TimerType.shortBreak:
-        return _settings.shortBreakDurationMinutes * 60;
+        return _timerConfig.shortBreakDurationMinutes * 60; // Use _timerConfig
       case TimerType.longBreak:
-        return _settings.longBreakDurationMinutes * 60;
+        return _timerConfig.longBreakDurationMinutes * 60; // Use _timerConfig
     }
   }
 
   void _resetStateToCurrentSettings() {
-    final workSecs = _settings.workDurationMinutes * 60;
+    final workSecs = _timerConfig.workDurationMinutes * 60; // Use _timerConfig
     _state =
         TimerState.initial(
-          _settings.workDurationMinutes,
-          _settings.workIntervalsUntilLongBreak,
+          _timerConfig.workDurationMinutes, // Use _timerConfig
+          _timerConfig.workIntervalsUntilLongBreak, // Use _timerConfig
+          _appConfig.isFlipStyle,
         ).copyWith(
-          isFlipView: _settings.isFlipStyle,
+          // isFlipView is no longer set in state's copyWith
           totalSeconds: workSecs,
           remainingSeconds: workSecs,
         );
+    notifyListeners(); // ADDED: Ensure UI updates when settings change
   }
 
   void _startUiTicker(DateTime targetTime) {
@@ -258,17 +323,29 @@ class TimerProvider with ChangeNotifier, WidgetsBindingObserver {
     });
   }
 
-  void _timerCompleted() {
+  Future<void> _timerCompleted() async {
     _uiTicker?.cancel();
-    _state = _state.copyWith(
-      remainingSeconds: 0,
-      status: TimerStatus.completed,
-    );
 
-    if (_settings.isSoundEnabled) {
-      _audioService.playBell();
+    // 1. Play completion sound
+    if (_appConfig.isSoundEnabled) {
+      // Use _appConfig
+      await AudioService().playBell();
     }
 
-    notifyListeners();
+    // 2. Clear background service and storage state
+    if (!kIsWeb) {
+      FlutterBackgroundService().invoke('stop');
+    }
+    await _storage.clearTimerState();
+
+    // 3. Automatically transition to the next block (which handles the pomodoro count update)
+    // startNextBlock() sets the status to TimerStatus.initial for the next block.
+    await startNextBlock();
+
+    // Note: notifyListeners() is called inside startNextBlock()
+  }
+
+  Future<void> completeTutorial() async {
+    await _storage.setHasSeenTutorial();
   }
 }
