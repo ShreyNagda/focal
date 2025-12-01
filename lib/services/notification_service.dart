@@ -97,8 +97,6 @@ class NotificationService {
       android: androidPlatformChannelSpecifics,
     );
 
-    print("Paused notification");
-
     await _notificationsPlugin.show(
       888,
       "$title session - Paused",
@@ -123,7 +121,6 @@ class NotificationService {
     final platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
     );
-    print("Finished notification");
     await _notificationsPlugin.show(999, title, body, platformChannelSpecifics);
   }
 

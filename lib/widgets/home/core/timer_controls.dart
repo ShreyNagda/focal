@@ -1,11 +1,12 @@
 // Timer Controls (formerly _TimerControls)
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:focal/models/timer_state.dart';
+import 'package:focal/screens/settings_screen.dart';
+import 'package:toastification/toastification.dart';
 
 import '../../../providers/timer_provider.dart';
-import '../../settings/settings_dialog.dart';
 
 class TimerControls extends StatelessWidget {
   final TimerState state;
@@ -23,67 +24,125 @@ class TimerControls extends StatelessWidget {
             "Do you want to skip the break and start the next work session?",
           ),
           actions: [
-            TextButton(
+            CupertinoDialogAction(
               onPressed: () => Navigator.pop(context),
+              isDefaultAction: true,
               child: const Text("Cancel"),
             ),
-            ElevatedButton(
+            CupertinoDialogAction(
               onPressed: () async {
                 final navigator = Navigator.of(context);
                 await provider.skipBreak();
                 navigator.pop();
               },
+              isDestructiveAction: true,
               child: const Text("Yes, Skip Break"),
             ),
           ],
         ),
       );
     } else {
-      Fluttertoast.showToast(
-        msg: "Cannot skip work sessions!",
-        toastLength: Toast.LENGTH_SHORT,
-        timeInSecForIosWeb: 1,
+      final theme = Theme.of(context);
+
+      toastification.show(
+        context: context, // optional if you use ToastificationWrapper
+        title: Text('Cannot skip work sessions!'),
+        autoCloseDuration: const Duration(seconds: 3),
+        alignment: Alignment.bottomCenter,
+        type: ToastificationType.info,
+        icon: Icon(Icons.info_outline, color: Colors.redAccent),
+        backgroundColor: theme.colorScheme.onPrimary,
       );
     }
+  }
+
+  void handleReset(BuildContext context, TimerType current) {
+    String type = current == TimerType.work ? "Work" : "Break";
+    showDialog(
+      context: context,
+      builder: (_) => CupertinoAlertDialog(
+        title: const Text("Skip break"),
+        content: Text("Do you want to restart the $type"),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context),
+            isDefaultAction: true,
+            child: const Text("Cancel"),
+          ),
+          CupertinoDialogAction(
+            onPressed: () async {
+              provider.resetTimer();
+              Navigator.pop(context);
+            },
+            isDestructiveAction: true,
+            child: Text("Yes, Restart $type"),
+          ),
+        ],
+      ),
+    );
+    // showDialog(
+    //   context: context,
+    //   builder: (_) {
+    //     return CupertinoAlertDialog(
+    //       title: Text("Restart $type session"),
+    //       content: Text("Do you want to restart the $type session?"),
+    //       actions: [
+    //         CupertinoDialogAction(
+    //           child: Text("Cancel"),
+    //           onPressed: () {
+    //             Navigator.pop(context);
+    //           },
+    //         ),
+    //         CupertinoDialogAction(
+    //           child: Text("Yes, Restart"),
+    //           onPressed: () {
+    //             provider.resetTimer();
+    //             Navigator.pop(context);
+    //           },
+    //         ),
+    //       ],
+    //     );
+    // },
+    // );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isRunning = state.status == TimerStatus.running;
-    final isCompleted = state.status == TimerStatus.completed;
 
-    if (isCompleted) {
-      return Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: SizedBox(
-            width: double.infinity,
-            height: 60,
-            child: ElevatedButton.icon(
-              onPressed: () async {
-                await provider.startTimer();
-              },
-              icon: const Icon(Icons.skip_next_rounded),
-              label: const Text(
-                'START NEXT BLOCK',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: theme.colorScheme.primary,
-                foregroundColor: theme.colorScheme.onPrimary,
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+    // if (isCompleted) {
+    //   return Center(
+    //     child: ConstrainedBox(
+    //       constraints: const BoxConstraints(maxWidth: 400),
+    //       child: SizedBox(
+    //         width: double.infinity,
+    //         height: 60,
+    //         child: ElevatedButton.icon(
+    //           onPressed: () async {
+    //             await provider.startTimer();
+    //           },
+    //           icon: const Icon(Icons.skip_next_rounded),
+    //           label: const Text(
+    //             'START NEXT BLOCK',
+    //             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+    //           ),
+    //           style: ElevatedButton.styleFrom(
+    //             backgroundColor: theme.colorScheme.primary,
+    //             foregroundColor: theme.colorScheme.onPrimary,
+    //             elevation: 4,
+    //             shape: RoundedRectangleBorder(
+    //               borderRadius: BorderRadius.circular(16),
+    //             ),
+    //           ),
+    //         ),
+    //       ),
+    //     ),
+    //   );
+    // }
 
     return Row(
+      // mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         // Settings Button
@@ -92,9 +151,9 @@ class TimerControls extends StatelessWidget {
           height: 60,
           child: FloatingActionButton(
             heroTag: "settings_btn",
-            onPressed: () => showDialog(
-              context: context,
-              builder: (context) => const SettingsDialog(),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ),
             backgroundColor: theme.colorScheme.surface,
             foregroundColor: theme.colorScheme.onSurface,
@@ -107,7 +166,7 @@ class TimerControls extends StatelessWidget {
           ),
         ),
 
-        const SizedBox(width: 24),
+        const SizedBox(width: 20),
 
         GestureDetector(
           onLongPress: () => _handleLongPress(context, state.currentType),
@@ -136,14 +195,17 @@ class TimerControls extends StatelessWidget {
         ),
 
         // Reset Button
-        if (state.status != TimerStatus.initial) ...[
-          const SizedBox(width: 24),
-          SizedBox(
+        // if (state.status != TimerStatus.initial) ...[
+        const SizedBox(width: 20),
+        Visibility(
+          visible: state.status != TimerStatus.initial,
+          replacement: SizedBox(width: 60, height: 60),
+          child: SizedBox(
             width: 60,
             height: 60,
             child: FloatingActionButton(
               heroTag: "reset_btn",
-              onPressed: provider.resetTimer,
+              onPressed: () => handleReset(context, state.currentType),
               backgroundColor: theme.colorScheme.surface,
               foregroundColor: theme.colorScheme.onSurface,
               elevation: 2,
@@ -156,8 +218,9 @@ class TimerControls extends StatelessWidget {
               child: const Icon(Icons.refresh_rounded, size: 28),
             ),
           ),
-        ],
+        ),
       ],
+      // ],
     );
   }
 }

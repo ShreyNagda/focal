@@ -1,13 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-class AppTheme {
-  // --- Colors ---
-  // Toned-down Pomodoro Red (Slightly darker and less saturated than 0xFFE53935)
+class CustomColors {
   static const Color pomodoroRed = Color(0xFFD32F2F);
   static const Color tealAccent = Color(0xFF26A69A);
   static const Color blueAccent = Color(0xFF42A5F5);
+}
 
+class AppTheme {
   // Dark Palette (Existing)
   static const Color darkBackground = Color(0xFF1F1F1F);
   static const Color darkSurface = Color(0xFF2C2C2C);
@@ -25,10 +25,14 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       primaryColor: CupertinoColors.darkBackgroundGray,
-      scaffoldBackgroundColor: lightBackground,
+      scaffoldBackgroundColor: CupertinoColors.lightBackgroundGray,
+      appBarTheme: AppBarTheme(backgroundColor: Colors.transparent),
+      sliderTheme: SliderThemeData(
+        inactiveTrackColor: CupertinoColors.darkBackgroundGray.withAlpha(40),
+      ),
       colorScheme: const ColorScheme.light(
         primary: CupertinoColors.darkBackgroundGray,
-        secondary: tealAccent,
+        secondary: Colors.black54,
         surface: lightSurface,
         onSurface: lightText,
         tertiaryContainer: lightCard,
@@ -37,6 +41,7 @@ class AppTheme {
       iconTheme: const IconThemeData(color: lightText),
       textTheme: Typography.blackMountainView.apply(fontFamily: 'Roboto'),
       dialogTheme: const DialogThemeData(backgroundColor: lightSurface),
+      disabledColor: lightText.withAlpha(100),
       dividerColor: Colors.black12,
     );
   }
@@ -47,9 +52,13 @@ class AppTheme {
       brightness: Brightness.dark,
       primaryColor: CupertinoColors.lightBackgroundGray,
       scaffoldBackgroundColor: darkBackground,
+      appBarTheme: AppBarTheme(backgroundColor: Colors.transparent),
+      sliderTheme: SliderThemeData(
+        inactiveTrackColor: CupertinoColors.lightBackgroundGray.withAlpha(40),
+      ),
       colorScheme: const ColorScheme.dark(
         primary: CupertinoColors.lightBackgroundGray,
-        secondary: tealAccent,
+        secondary: Colors.white,
         surface: darkSurface,
         onSurface: darkText,
         tertiaryContainer: darkCard,
@@ -58,6 +67,7 @@ class AppTheme {
       iconTheme: const IconThemeData(color: darkText),
       textTheme: Typography.whiteMountainView.apply(fontFamily: 'Roboto'),
       dialogTheme: const DialogThemeData(backgroundColor: darkSurface),
+      disabledColor: darkText.withAlpha(140),
       dividerColor: Colors.white10,
     );
   }

@@ -103,7 +103,7 @@ class _FlipDigitState extends State<FlipDigit>
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
+                color: Colors.black.withAlpha(50),
                 blurRadius: 10,
                 offset: const Offset(0, 5),
               ),
@@ -159,12 +159,17 @@ class _DigitHalf extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // USE THEME COLORS
-    final cardColor = Theme.of(context).colorScheme.tertiaryContainer;
+    final baseCardColor = Theme.of(context).colorScheme.tertiaryContainer;
+    // final cardColor = Theme.of(context).colorScheme.tertiaryContainer;
     final textColor = Theme.of(context).colorScheme.onTertiaryContainer;
 
     // Calculate a slightly darker variant for gradients/shadows based on brightness
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final shadowColor = isDark ? Colors.black : Colors.grey.shade400;
+
+    final Color cardColor = isTop
+        ? baseCardColor
+        : Color.lerp(baseCardColor, Colors.black, isDark ? 0.15 : 0.04)!;
 
     return ClipRRect(
       borderRadius: BorderRadius.vertical(
@@ -202,7 +207,7 @@ class _DigitHalf extends StatelessWidget {
                   height: 1.0,
                   shadows: [
                     Shadow(
-                      color: shadowColor.withOpacity(0.3),
+                      color: shadowColor.withAlpha(75),
                       offset: const Offset(0, 2),
                       blurRadius: 4,
                     ),
@@ -218,10 +223,10 @@ class _DigitHalf extends StatelessWidget {
                   height: 4,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: shadowColor.withOpacity(0.4),
+                      color: shadowColor.withAlpha(100),
                       border: Border(
                         bottom: BorderSide(
-                          color: shadowColor.withOpacity(0.5),
+                          color: shadowColor.withAlpha(125),
                           width: 1,
                         ),
                       ),
@@ -234,7 +239,7 @@ class _DigitHalf extends StatelessWidget {
                   left: 0,
                   right: 0,
                   height: 1,
-                  child: Container(color: Colors.white.withOpacity(0.15)),
+                  child: Container(color: Colors.white.withAlpha(40)),
                 ),
             ],
           ),
@@ -267,10 +272,10 @@ class TimeSeparator extends StatelessWidget {
         shape: BoxShape.circle,
         color: Theme.of(
           context,
-        ).colorScheme.onSurface.withOpacity(0.5), // Themed Dot
+        ).colorScheme.onSurface.withAlpha(125), // Themed Dot
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).shadowColor.withOpacity(0.2),
+            color: Theme.of(context).shadowColor.withAlpha(50),
             blurRadius: 6,
             spreadRadius: 1,
           ),

@@ -13,7 +13,8 @@ class AudioService {
         mode: PlayerMode.lowLatency,
       );
 
-      // Dispose AFTER playback finishes
+      // Automatically Dispose AFTER playback finishes
+      // No dispose method required
       player.onPlayerComplete.first.then((_) => player.dispose());
     } catch (e) {
       debugPrint("Error playing sound: $e");

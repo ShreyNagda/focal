@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:focal/config/theme.dart';
 import 'package:focal/models/timer_state.dart';
 
 class CircularTimer extends StatelessWidget {
@@ -24,15 +25,15 @@ class CircularTimer extends StatelessWidget {
 
     switch (timerType) {
       case TimerType.work:
-        activeColor = const Color(0xFFE53935); // Red
+        activeColor = CustomColors.pomodoroRed; // Red
         label = 'FOCUS';
         break;
       case TimerType.shortBreak:
-        activeColor = const Color(0xFF26A69A); // Teal
+        activeColor = CustomColors.tealAccent; // Teal
         label = 'SHORT BREAK';
         break;
       case TimerType.longBreak:
-        activeColor = const Color(0xFF42A5F5); // Blue
+        activeColor = CustomColors.blueAccent; // Blue
         label = 'LONG BREAK';
         break;
     }

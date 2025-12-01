@@ -4,6 +4,7 @@ import 'package:focal/providers/config_provider.dart';
 import 'package:focal/screens/tutorial_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:toastification/toastification.dart';
 import 'services/storage_service.dart';
 import 'services/background_service.dart';
 import 'services/notification_service.dart';
@@ -46,7 +47,9 @@ void main() async {
           },
         ),
       ],
-      child: PomodoroApp(showTutorial: showTutorial),
+      child: ToastificationWrapper(
+        child: PomodoroApp(showTutorial: showTutorial),
+      ),
     ),
   );
 }

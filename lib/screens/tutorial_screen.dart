@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/storage_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/timer_provider.dart';
 import 'home_screen.dart';
 
 class TutorialItem {
@@ -64,8 +65,8 @@ class _TutorialScreenState extends State<TutorialScreen> {
   }
 
   Future<void> _completeTutorial() async {
-    final prefs = await SharedPreferences.getInstance();
-    await StorageService(prefs).setHasSeenTutorial();
+    final timerProvider = context.read<TimerProvider>();
+    await timerProvider.completeTutorial();
 
     if (!mounted) return;
 
@@ -90,6 +91,159 @@ class _TutorialScreenState extends State<TutorialScreen> {
     }
   }
 
+  // --- Helper Widgets ---
+
+  Widget _buildHeader(BuildContext context, ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          if (Navigator.canPop(context))
+            IconButton(
+              icon: Icon(Icons.close, color: theme.iconTheme.color),
+              onPressed: () => Navigator.pop(context),
+            )
+          else
+            const SizedBox(width: 48),
+
+          if (_currentPage < _items.length - 1)
+            TextButton(
+              onPressed: _completeTutorial,
+              child: Text(
+                'Skip',
+                style: TextStyle(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPageIndicators(ColorScheme colorScheme) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        _items.length,
+        (index) => AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          margin: const EdgeInsets.only(right: 8),
+          height: 8,
+          width: _currentPage == index ? 24 : 8,
+          decoration: BoxDecoration(
+            color: _currentPage == index
+                ? colorScheme.primary
+                : colorScheme.onSurface.withAlpha(51),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNextButton(ColorScheme colorScheme) {
+    return FloatingActionButton(
+      onPressed: _onNext,
+      backgroundColor: colorScheme.primary,
+      foregroundColor: colorScheme.onPrimary,
+      elevation: 2,
+      child: Icon(
+        _currentPage == _items.length - 1 ? Icons.check : Icons.arrow_forward,
+      ),
+    );
+  }
+
+  Widget _buildTutorialPage(
+    BuildContext context,
+    ColorScheme colorScheme,
+    TutorialItem item,
+    double maxWidth,
+    bool isLandscape,
+  ) {
+    // --- Reusable Icon Block ---
+    final iconBlock = Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: colorScheme.primary.withAlpha(25),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(item.icon, size: 80, color: colorScheme.primary),
+    );
+
+    // --- Reusable Text Block ---
+    final textBlock = Column(
+      mainAxisAlignment: isLandscape
+          ? MainAxisAlignment.center
+          : MainAxisAlignment.start,
+      crossAxisAlignment: isLandscape
+          ? CrossAxisAlignment.start
+          : CrossAxisAlignment.center,
+      mainAxisSize: isLandscape ? MainAxisSize.min : MainAxisSize.max,
+      children: [
+        if (isLandscape)
+          const SizedBox(height: 16), // Padding adjustment for landscape
+
+        Text(
+          item.title,
+          textAlign: isLandscape ? TextAlign.left : TextAlign.center,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          item.description,
+          textAlign: isLandscape ? TextAlign.left : TextAlign.center,
+          style: TextStyle(
+            fontSize: 16,
+            height: 1.5,
+            color: colorScheme.onSurface.withAlpha(178),
+          ),
+        ),
+        if (isLandscape)
+          const SizedBox(height: 16), // Padding adjustment for landscape
+      ],
+    );
+
+    return Center(
+      child: ConstrainedBox(
+        // Use a smaller maxWidth in landscape to prevent text from spreading too wide
+        constraints: BoxConstraints(maxWidth: isLandscape ? 800 : maxWidth),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          child: isLandscape
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Icon on the left
+                    iconBlock,
+                    const SizedBox(width: 48), // Spacing between icon and text
+                    // Text on the right (takes remaining space)
+                    Expanded(child: textBlock),
+                  ],
+                )
+              : Column(
+                  // Icon on top, Text below for portrait mode
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    iconBlock,
+                    const SizedBox(height: 48), // Spacing between icon and text
+                    textBlock,
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  // --- Main Build Method ---
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -98,141 +252,85 @@ class _TutorialScreenState extends State<TutorialScreen> {
     // Define Max Width for content containment on large screens
     const double maxWidth = 600;
 
+    // Build the fixed Header
+    final header = _buildHeader(context, theme);
+
+    // Build the Navigation/Footer Controls
+    final navControls = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: maxWidth),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildPageIndicators(colorScheme),
+            _buildNextButton(colorScheme),
+          ],
+        ),
+      ),
+    );
+
+    // REVISED: Define the PageView builder ONLY (without the Expanded wrapper)
+    final corePageViewContent = PageView.builder(
+      controller: _pageController,
+      onPageChanged: _onPageChanged,
+      itemCount: _items.length,
+      itemBuilder: (context, index) {
+        final item = _items[index];
+        final isLandscape =
+            MediaQuery.of(context).orientation == Orientation.landscape;
+
+        return _buildTutorialPage(
+          context,
+          colorScheme,
+          item,
+          maxWidth,
+          isLandscape,
+        );
+      },
+    );
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: Column(
-          children: [
-            // Header with Close/Skip
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (Navigator.canPop(context))
-                    IconButton(
-                      icon: Icon(Icons.close, color: theme.iconTheme.color),
-                      onPressed: () => Navigator.pop(context),
-                    )
-                  else
-                    const SizedBox(width: 48),
+        child: OrientationBuilder(
+          builder: (context, orientation) {
+            final isLandscape = orientation == Orientation.landscape;
 
-                  if (_currentPage < _items.length - 1)
-                    TextButton(
-                      onPressed: _completeTutorial,
-                      child: Text(
-                        'Skip',
-                        style: TextStyle(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.bold,
+            // --- LAYOUT STRUCTURE ---
+            return Column(
+              children: [
+                header, // Header always on top
+                // Conditional Layout for PageView and Controls
+                if (isLandscape)
+                  // LANDSCAPE: PageView and Controls arranged vertically in the main column
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Expanded(
+                          // FIX 1: This Expanded is necessary to constrain the PageView
+                          child: corePageViewContent, // Now wrapped only once
                         ),
-                      ),
+                        navControls, // Controls are placed below the page content
+                      ],
                     ),
-                ],
-              ),
-            ),
-
-            // Main Content (Constrained PageView)
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                onPageChanged: _onPageChanged,
-                itemCount: _items.length,
-                itemBuilder: (context, index) {
-                  final item = _items[index];
-                  return Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: maxWidth),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(32),
-                              decoration: BoxDecoration(
-                                color: colorScheme.primary.withAlpha(25),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                item.icon,
-                                size: 80,
-                                color: colorScheme.primary,
-                              ),
-                            ),
-                            const SizedBox(height: 48),
-                            Text(
-                              item.title,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: colorScheme.onSurface,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              item.description,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 16,
-                                height: 1.5,
-                                color: colorScheme.onSurface.withAlpha(178),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                  )
+                else
+                  // PORTRAIT: PageView takes remaining space, controls at the very bottom
+                  Expanded(
+                    // FIX 2: This Expanded now wraps the Column containing PageView and controls
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: corePageViewContent,
+                        ), // PageView expands
+                        navControls, // Controls are placed below the page content
+                      ],
                     ),
-                  );
-                },
-              ),
-            ),
-
-            // Bottom Navigation Area
-            Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: maxWidth),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Page Indicators
-                    Row(
-                      children: List.generate(
-                        _items.length,
-                        (index) => AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          margin: const EdgeInsets.only(right: 8),
-                          height: 8,
-                          width: _currentPage == index ? 24 : 8,
-                          decoration: BoxDecoration(
-                            color: _currentPage == index
-                                ? colorScheme.primary
-                                : colorScheme.onSurface.withAlpha(51),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // Next/Done Button
-                    FloatingActionButton(
-                      onPressed: _onNext,
-                      backgroundColor: colorScheme.primary,
-                      foregroundColor: colorScheme.onPrimary,
-                      elevation: 2,
-                      child: Icon(
-                        _currentPage == _items.length - 1
-                            ? Icons.check
-                            : Icons.arrow_forward,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );

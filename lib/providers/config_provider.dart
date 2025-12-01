@@ -35,14 +35,12 @@ class ConfigProvider with ChangeNotifier {
   }
 
   void updateTimerConfig(TimerConfig newConfig) {
-    print(newConfig);
     _timerConfig = newConfig;
     _storage.saveTimerConfig(newConfig);
     notifyListeners();
   }
 
   void updateAppConfig(AppConfig newConfig) {
-    print("App config chagned");
     _appConfig = newConfig;
     _storage.saveAppConfig(newConfig);
     notifyListeners();
@@ -64,5 +62,10 @@ class ConfigProvider with ChangeNotifier {
   void toggleSound(bool isSoundEnabled) {
     final newConfig = _appConfig.copyWith(isSoundEnabled: isSoundEnabled);
     updateAppConfig(newConfig);
+  }
+
+  Future<void> completeTutorial() async {
+    // Ensure this calls the correct method on the storage service
+    await _storage.setHasSeenTutorial();
   }
 }

@@ -1,5 +1,6 @@
 // Timer Type Indicator (formerly _TimerTypeIndicator)
 import 'package:flutter/material.dart';
+import 'package:focal/config/theme.dart';
 import 'package:focal/models/timer_state.dart';
 
 class TimerTypeIndicator extends StatelessWidget {
@@ -19,15 +20,15 @@ class TimerTypeIndicator extends StatelessWidget {
 
     switch (currentType) {
       case TimerType.work:
-        color = const Color(0xFFE53935); // Red
+        color = CustomColors.pomodoroRed; // Red
         icon = Icons.bolt;
         break;
       case TimerType.shortBreak:
-        color = const Color(0xFF26A69A); // Teal
+        color = CustomColors.tealAccent; // Teal
         icon = Icons.coffee;
         break;
       case TimerType.longBreak:
-        color = const Color(0xFF42A5F5); // Blue
+        color = CustomColors.blueAccent; // Blue
         icon = Icons.weekend;
         break;
     }
